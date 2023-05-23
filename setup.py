@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 """
 setup.py
-A module that installs projectname as a module
+A module that installs road-network-updater as a module
 """
 from glob import glob
 from os.path import basename, splitext
@@ -11,14 +11,14 @@ from setuptools import find_packages, setup
 
 #: Load version from source file
 version = {}
-with open('src/projectname/version.py') as fp:
+with open('src/road-network-updater/version.py') as fp:
     exec(fp.read(), version)
 
 setup(
-    name='projectname',
+    name='road-network-updater',
     version=version['__version__'],
     license='MIT',
-    description='Project description.',
+    description='Create a new version of the UGRC Road Network dataset',
     author='UGRC',
     author_email='ugrc@utah.gov',
     url='https://github.com/agrc/python',
@@ -61,6 +61,6 @@ setup(
         'pytest-runner',
     ],
     entry_points={'console_scripts': [
-        'projectname = projectname.main:main',
+        'rnupdate = road-network-updater.main:main',
     ]},
 )

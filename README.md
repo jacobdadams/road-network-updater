@@ -1,7 +1,7 @@
 # UGRC Python Starter Tempalate
 
-![Build Status](https://github.com/agrc/python/workflows/Build%20and%20Test/badge.svg)
-[![codecov](https://codecov.io/gh/agrc/python/branch/main/graph/badge.svg)](https://codecov.io/gh/agrc/python)
+![Build Status](https://github.com/jacobdadams/road-network-updater/workflows/Build%20and%20Test/badge.svg)
+[![codecov](https://codecov.io/gh/jacobdadams/road-network-updater/branch/main/graph/badge.svg)](https://codecov.io/gh/agrc/python)
 
 UGRC's default Python project configuration/template
 
