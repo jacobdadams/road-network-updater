@@ -4,16 +4,26 @@ import time
 
 import arcpy
 
-#from datetime import date
-#from datetime import datetime
+#: NOTES
 
-#: Notes before running: verify that these variables are pointing to the correct data (ie: at home vs at work)
-#: python 2.7
-# sgid_roads
-
-# get the date
-#today = date.today()
-#strDate = str(today.month).zfill(2) + str(today.day).zfill(2) +  str(today.year)
+#: urban designation: union of muni boundaries and census urban areas
+#: Steps:
+#:  1. filter out 15 (proposed), 99 (udot connectivity), 13 (non-road)
+#:  2. Build urban areas and intersect roads to identify urban and non-urban roads
+#:  3. Set speed limits
+#:      a. For non-urban 11, all 9 roads, and : set speed limit to 25
+#:      b. Set other roads lacking speed limits accordingly:
+#:          1, 2, 4: 65
+#:          3, 5, 7: 45
+#:          8, 10: 35
+#:          All others: 25
+#:  4. Set gravel flag:
+#:      a. DOT surface types D, I, N, U, '' (blank): gravel = yes
+#:      b. intersect '' and U roads with urban areas, matching roads get gravel = no
+#:  5. Set speed factors:
+#:      1, 2, 4 (free movement): none
+#:      All others: 1.3 (turns, traffic lights, gravel surfaces, etc)
+#:  6. Set time costs using (length_meters * 60 * speed_factor)/(1609.34 * speed_limit)
 
 # sgid_roads = 'Database Connections\\internal@SGID@internal.agrc.utah.gov.sde\\SGID.TRANSPORTATION.Roads'
 #: use a local copy when connected to the VPN
@@ -77,16 +87,16 @@ def main():
     arcpy.AddGeometryAttributes_management('network_roads_lyr', 'LINE_START_MID_END')
     arcpy.Delete_management('network_roads_lyr')
 
-    #: create the needed scratch data (ie: the urban areas) and assign the segments that intersect the urban bounaries with an URBTRAFFIC = Yes or No
+    #: create the needed scratch data (ie: the urban areas) and assign the segments that intersect the urban boundaries with an URBTRAFFIC = Yes or No
     urban_areas = generate_scratch_data(directory)
     #arcpy.MakeFeatureLayer_management(urban_areas, 'urban_areas_lyr')
     arcpy.MakeFeatureLayer_management(network_roads, 'network_roads_lyr')
     urban_roads_selected = arcpy.SelectLayerByLocation_management('network_roads_lyr', 'intersect', urban_areas)
-    # Replace a layer/table view name with a path to a dataset (which can be a layer file) or create the layer/table view within the script
+
     arcpy.CalculateField_management(
         urban_roads_selected, field='URBTRAFFIC', expression='"Y"', expression_type='VB', code_block=''
     )
-    # calculte the segments that were not in an urban area to 'N'
+    # calculate the segments that were not in an urban area to 'N'
     urban_roads_selected = arcpy.SelectLayerByAttribute_management(
         'network_roads_lyr', 'NEW_SELECTION', "URBTRAFFIC is NULL"
     )
@@ -94,9 +104,11 @@ def main():
         urban_roads_selected, field='URBTRAFFIC', expression='"N"', expression_type='VB', code_block=''
     )
 
+    #: If existing speed limits, set UESEEXISt = Y, else N and SPEED_LMT = 25
     #: begin calculating the field values
     #: USEEXIST
     print('Calculate USEEXIST fields...')
+    #: TODO: increase speed limit max for 80mp interstate sections
     # Yes
     urban_roads_selected = arcpy.SelectLayerByAttribute_management(
         'network_roads_lyr', 'NEW_SELECTION', "not (SPEED_LMT is null) and ( SPEED_LMT >= 5 and SPEED_LMT <= 80)"
@@ -369,7 +381,7 @@ def main():
 
     ## Part 3 - Build the network dataset
     # Create 2 different values for the NETSUBTYPE field so connectivity can be modeled at endpoints for limited access highways and ramps and at any vertex for other, surface streets:
-    # Query for limited access features and set NETSUBTYPE = 1 and set EXCL_WALK = Y
+    # Query for limited access features and set NETSUBTYPE = 1 and set EXCL_WALK = Y
     print('Calculate NETSUBTYPE values...')
     urban_roads_selected = arcpy.SelectLayerByAttribute_management(
         'network_roads_lyr', 'NEW_SELECTION',
@@ -381,7 +393,7 @@ def main():
     arcpy.CalculateField_management(
         urban_roads_selected, field='EXCL_WALK', expression='Y', expression_type='VB', code_block=''
     )
-    # Switch selection and set remaining records NETSUBTYPE = 2 and set EXCL_WALK = N
+    # Switch selection and set remaining records NETSUBTYPE = 2 and set EXCL_WALK = N
     urban_roads_selected = arcpy.SelectLayerByAttribute_management('network_roads_lyr', 'SWITCH_SELECTION')
     arcpy.CalculateField_management(
         urban_roads_selected, field='NETSUBTYPE', expression='2', expression_type='VB', code_block=''
@@ -401,13 +413,16 @@ def main():
     arcpy.AddSubtype_management(network_roads, subtype_code='1', subtype_description='Limited Access & Ramps')
     arcpy.AddSubtype_management(network_roads, subtype_code='2', subtype_description='Other')
 
-    # build the netork based on an existing network .xml file template
-    ## this is done in a seperate script b/c it needs to be run in Desktop 10.6 (or higher) or Pro
+    # build the network based on an existing network .xml file template
+    ## this is done in a separate script b/c it needs to be run in Desktop 10.6 (or higher) or Pro
     ## use this script: 'agrc_roadnetwork_create_and_build_network_run2nd.py'
     print('Done!')
 
 
-# this function imports the user-defined utrans roads into the the netork dataset feature class
+#: Uncalled, not working?
+
+
+# this function imports the user-defined utrans roads into the the network dataset feature class
 def import_RoadsIntoNetworkDataset(sgid_roads_to_import, network_roads):
     # get list of field names
     sgid_roads_fieldnames = [f.name for f in arcpy.ListFields(sgid_roads_to_import)]
@@ -418,7 +433,7 @@ def import_RoadsIntoNetworkDataset(sgid_roads_to_import, network_roads):
                                sql_clause=('TOP 10', None)) as search_cursor, arcpy.da.InsertCursor(
                                    network_roads, network_roads_fieldnames
                                ) as insert_cursor:
-        # itterate though the intersected utrans road centerline features
+        # iterate though the intersected utrans road centerline features
         for utrans_row in search_cursor:
             name = str(search_cursor[sgid_roads_fieldnames.index('NAME')])
             pre_dir = str(search_cursor[sgid_roads_fieldnames.index('PREDIR')])
